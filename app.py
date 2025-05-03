@@ -84,7 +84,7 @@ if st.session_state.thumbnail_mode == "Manual":
             st.stop()
 
 # Number of thumbnails per PDF page
-thumbs_per_page = st.slider("Number of thumbnails per PDF page:", 2, 12, 4)
+thumbs_per_page = st.slider("Number of thumbnails per PDF page (recommended 6):", 2, 12, 6)
 
 # Download video and generate thumbnails
 if st.button("Download Video & Generate Thumbnails"):
