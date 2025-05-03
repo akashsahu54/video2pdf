@@ -21,7 +21,7 @@ if 'thumbnail_mode' not in st.session_state:
 if 'video_title' not in st.session_state:
     st.session_state.video_title = ''
 
-st.title("🎥 YT SnapPDF")
+st.title("📸 YT SnapPDF")
 
 # YouTube URL input
 video_url = st.text_input("Enter YouTube video URL:", key="video_url_input")
@@ -127,6 +127,21 @@ if st.button("Download Video & Generate Thumbnails"):
             st.success("✅ Video downloaded successfully!")
         except Exception as e:
             st.error(f"❌ Error downloading video: {e}")
+            st.stop()
+
+        # Re-encode video to ensure compatibility
+        reencoded_file = f"reencoded_{video_title}.mp4"
+        try:
+            st.info("🔄 Re-encoding video for compatibility...")
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", video_file, "-c:v", "libx264", "-c:a", "aac", reencoded_file],
+                check=True
+            )
+            st.success("✅ Video re-encoded successfully!")
+            # Update video_file to use re-encoded file
+            video_file = reencoded_file
+        except Exception as e:
+            st.error(f"❌ Error re-encoding video: {e}")
             st.stop()
 
         st.info("🖼️ Generating thumbnails...")
