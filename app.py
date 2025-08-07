@@ -1,5 +1,4 @@
 import streamlit as st
-import subprocess
 import os
 import shutil
 import re
@@ -9,11 +8,12 @@ import requests
 from PIL import Image
 from fpdf import FPDF
 from urllib.parse import urlparse, parse_qs
+from yt_dlp import YoutubeDL
 
-# Set your YouTube Data API key
+# ✅ Set your YouTube Data API key
 YOUTUBE_API_KEY = "AIzaSyBqnLbn8m8hmbOorgc2rGFfOaYl7BCfZz4"
 
-# Safely remove folders (with permission handling)
+# ✅ Safely remove folders (with permission handling)
 def on_rm_error(func, path, exc_info):
     os.chmod(path, stat.S_IWRITE)
     func(path)
@@ -22,7 +22,7 @@ def safe_rmtree(path):
     if os.path.exists(path):
         shutil.rmtree(path, onerror=on_rm_error)
 
-# Extract video ID from YouTube URL
+# ✅ Extract video ID from YouTube URL
 def extract_video_id(url):
     parsed_url = urlparse(url)
     if parsed_url.hostname == "youtu.be":
@@ -32,7 +32,7 @@ def extract_video_id(url):
         return query.get("v", [None])[0]
     return None
 
-# Get video title using YouTube Data API
+# ✅ Get video title using YouTube Data API
 def fetch_video_title(video_url):
     video_id = extract_video_id(video_url)
     if not video_id:
@@ -42,14 +42,28 @@ def fetch_video_title(video_url):
         response = requests.get(api_url)
         data = response.json()
         title = data["items"][0]["snippet"]["title"]
-        # Sanitize title for filename
         title = re.sub(r'[^\w\s-]', '', title).replace(' ', '_')
         return title or "video"
     except Exception as e:
         st.error(f"❌ Error fetching video title from YouTube API: {e}")
         return "video"
 
-# Session state setup
+# ✅ Download YouTube video using yt-dlp Python API
+def download_video(url, output_filename):
+    try:
+        ydl_opts = {
+            'outtmpl': output_filename,
+            'format': '18',  # mp4 format with both video/audio
+            'quiet': True,
+        }
+        with YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        return True
+    except Exception as e:
+        st.error(f"❌ yt-dlp download error: {e}")
+        return False
+
+# ✅ Streamlit session state setup
 if 'download_complete' not in st.session_state:
     st.session_state.download_complete = False
 if 'thumbs_path' not in st.session_state:
@@ -64,18 +78,13 @@ if 'video_title' not in st.session_state:
     st.session_state.video_title = ''
 
 st.title("📸 YT SnapPDF")
-
 video_url = st.text_input("Enter YouTube video URL:", key="video_url_input")
 
 if video_url != st.session_state.current_video_url:
     safe_rmtree("thumbs")
     os.makedirs("thumbs", exist_ok=True)
-
-    for file in glob.glob("*.mp4"):
-        os.remove(file)
-    for file in glob.glob("*.pdf"):
-        os.remove(file)
-
+    for file in glob.glob("*.mp4"): os.remove(file)
+    for file in glob.glob("*.pdf"): os.remove(file)
     st.session_state.download_complete = False
     st.session_state.thumbs_path = []
     st.session_state.selected_thumbs = []
@@ -102,13 +111,11 @@ if st.session_state.thumbnail_mode == "Manual":
         try:
             for ts in timestamps_input.split(","):
                 ts = ts.strip()
-                if ":" not in ts:
-                    raise ValueError("Invalid format! Use MM:SS.")
-                minutes, seconds = map(int, ts.split(":"))
-                if minutes < 0 or seconds < 0 or seconds >= 60:
-                    raise ValueError("Invalid minutes or seconds.")
-                total_seconds = minutes * 60 + seconds
-                manual_timestamps.append(total_seconds)
+                if ":" not in ts: raise ValueError("Invalid format! Use MM:SS.")
+                m, s = map(int, ts.split(":"))
+                if m < 0 or s < 0 or s >= 60:
+                    raise ValueError("Invalid time.")
+                manual_timestamps.append(m * 60 + s)
         except ValueError as e:
             st.error(f"❌ Error in timestamps: {e}")
             st.stop()
@@ -119,31 +126,22 @@ if st.button("Download Video & Generate Thumbnails"):
     if video_url:
         safe_rmtree("thumbs")
         os.makedirs("thumbs", exist_ok=True)
-
-        for file in glob.glob("*.mp4"):
-            os.remove(file)
-        for file in glob.glob("*.pdf"):
-            os.remove(file)
+        for file in glob.glob("*.mp4"): os.remove(file)
+        for file in glob.glob("*.pdf"): os.remove(file)
 
         video_title = fetch_video_title(video_url)
         st.session_state.video_title = video_title
         video_file = f"{video_title}.mp4"
 
-        try:
-            st.info("📥 Downloading video...")
-            subprocess.run(["yt-dlp", "-f", "mp4", "-o", video_file, video_url], check=True)
-            st.success("✅ Video downloaded!")
-        except Exception as e:
-            st.error(f"❌ Error downloading video: {e}")
+        st.info("📥 Downloading video...")
+        if not download_video(video_url, video_file):
             st.stop()
+        st.success("✅ Download complete!")
 
         reencoded_file = f"reencoded_{video_title}.mp4"
         try:
             st.info("🔄 Re-encoding video for compatibility...")
-            subprocess.run([
-                "ffmpeg", "-y", "-i", video_file,
-                "-c:v", "libx264", "-c:a", "aac", reencoded_file
-            ], check=True)
+            os.system(f'ffmpeg -y -i "{video_file}" -c:v libx264 -c:a aac "{reencoded_file}"')
             st.success("✅ Re-encoded successfully!")
             video_file = reencoded_file
         except Exception as e:
@@ -152,39 +150,33 @@ if st.button("Download Video & Generate Thumbnails"):
 
         st.info("🖼️ Generating thumbnails...")
         if st.session_state.thumbnail_mode == "Automatic":
-            os.system(f"ffmpeg -y -i {video_file} -vf fps=1/30 thumbs/thumb_%03d.jpg")
+            os.system(f'ffmpeg -y -i "{video_file}" -vf fps=1/30 thumbs/thumb_%03d.jpg')
             thumbs = sorted([f for f in os.listdir("thumbs") if f.endswith(".jpg")])
             st.session_state.thumbs_path = [os.path.join("thumbs", t) for t in thumbs]
-            st.session_state.download_complete = True
-            st.session_state.selected_thumbs = []
         else:
-            if not manual_timestamps:
-                st.error("Please enter valid timestamps.")
-                st.stop()
             thumbs = []
             for i, timestamp in enumerate(manual_timestamps):
                 output_file = f"thumbs/thumb_{i:03d}.jpg"
-                os.system(f"ffmpeg -y -i {video_file} -ss {timestamp} -vframes 1 {output_file}")
-                if os.path.exists(output_file):
-                    thumbs.append(output_file)
+                os.system(f'ffmpeg -y -i "{video_file}" -ss {timestamp} -vframes 1 "{output_file}"')
+                if os.path.exists(output_file): thumbs.append(output_file)
             st.session_state.thumbs_path = thumbs
-            st.session_state.download_complete = True
-            st.session_state.selected_thumbs = []
 
         if not st.session_state.thumbs_path:
-            st.error("No thumbnails generated.")
+            st.error("❌ No thumbnails generated.")
             st.stop()
-    else:
-        st.warning("Please enter a valid YouTube URL.")
 
-if st.session_state.download_complete and st.session_state.thumbs_path and st.session_state.current_video_url == video_url:
+        st.session_state.download_complete = True
+        st.session_state.selected_thumbs = []
+    else:
+        st.warning("⚠️ Please enter a valid YouTube URL.")
+
+if st.session_state.download_complete:
     st.write("### Thumbnails:")
     cols = st.columns(2)
-    
     for i, thumb in enumerate(st.session_state.thumbs_path):
         with cols[i % 2]:
             caption = f"{i*30} sec" if st.session_state.thumbnail_mode == "Automatic" else \
-                      f"{manual_timestamps[i] // 60}:{manual_timestamps[i] % 60:02d}" if i < len(manual_timestamps) else "Unknown"
+                      f"{manual_timestamps[i]//60}:{manual_timestamps[i]%60:02d}" if i < len(manual_timestamps) else "Unknown"
             st.image(thumb, caption=caption)
             if st.button(f"Add to PDF - {caption}", key=f"btn_{i}"):
                 if (thumb, caption) not in st.session_state.selected_thumbs:
@@ -192,14 +184,12 @@ if st.session_state.download_complete and st.session_state.thumbs_path and st.se
                     st.rerun()
 
     if st.session_state.selected_thumbs:
-        st.write("Selected for PDF:")
+        st.write("### Selected for PDF:")
         for thumb in st.session_state.selected_thumbs:
             st.write(f"- {thumb[1]}")
 
         if st.button("📄 Generate PDF"):
-            for file in glob.glob("*.pdf"):
-                os.remove(file)
-
+            for file in glob.glob("*.pdf"): os.remove(file)
             pdf = FPDF()
             for page_num in range(0, len(st.session_state.selected_thumbs), thumbs_per_page):
                 pdf.add_page()
