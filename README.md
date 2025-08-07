@@ -21,8 +21,14 @@
 ---
 
 ## 📸 Screenshot
+<img width="1377" height="751" alt="image" src="https://github.com/user-attachments/assets/5072685f-56ef-4dff-9e1a-a6638a721c97" />
+<img width="767" height="789" alt="image" src="https://github.com/user-attachments/assets/69db4f94-d14f-4478-8fd9-8ceb206ec12d" />
+<img width="460" height="407" alt="image" src="https://github.com/user-attachments/assets/550ee81d-24a8-41b0-a953-930d70eb14a1" />
+<img width="606" height="372" alt="image" src="https://github.com/user-attachments/assets/eb5f07d5-51b1-4498-a176-e6270084655b" />
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/7f6e826f-0cb3-497d-a725-8497519ceaa5" />
 
-> *(Include a screenshot of your Streamlit app UI here if available)*
+
+
 
 ---
 
